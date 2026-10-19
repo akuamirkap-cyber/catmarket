@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------
 //  Cute chibi cats (thick plum outline, big round eyes): physics + animation + drawing
 // ---------------------------------------------------------------
-import { drawItem, FISH_S } from './fish';
+import { drawItem } from './fish';
 import { star4 } from './scenery';
 
 const PI = Math.PI;
@@ -615,30 +615,36 @@ function drawCarry(ctx: CanvasRenderingContext2D, m: Cat, p: Pal, mode: 'full' |
   // Arms holding the basket/wadah
   if (mode === 'full') {
     for (const s of [-1, 1]) {
-      limbDraw(ctx, s * Ly.HW * 0.82, Ly.yt + 8, ARM_R0, cx + s * 17.5, by - 1, ARM_R1, p.suit ?? p.fur);
+      limbDraw(ctx, s * Ly.HW * 0.82, Ly.yt + 8, ARM_R0, cx + s * 20, by - 1, ARM_R1, p.suit ?? p.fur);
     }
   }
 
   // ---- MONKEY-MART VERTICAL STACK (Tumpuk ke atas tinggi di wadah) ----
   // Items stack vertically one on top of another reaching upwards!
-  const itemStep = 13.5;
+  // The cat is drawn at 0.8x in the world, so an item drawn here at 1.06 is drawn at
+  // 1.06 * 0.8 = 0.85 world scale — exactly the size it has lying on the ground (FISH_S 0.8).
+  // That is why a fish / fruit no longer "shrinks" when it is picked up into the basket.
+  const itemStep = 16;
+  const itemS = 1.06;
+  // The pile is carried at the cat's side (like a real shopping bag) so it never covers the face
+  const pileX = cx;
   for (let i = 0; i < n; i++) {
-    // Dynamic sway for the tall stack as the cat runs
+    // Dynamic sway for the tall stack as the cat runs; a tiny alternating offset makes the
+    // pile look stacked (like a real pile of fruit) instead of a straight column.
     const swayX = (m.sway * 1.3 + Math.sin(m.phase + i * 0.35) * (0.8 + i * 0.4) * m.mv) * (0.7 + i * 0.28);
     const swayRot = (m.sway * 0.04 + Math.sin(m.phase + i * 0.3) * 0.025 * m.mv) * Math.min(i, 5);
-    const ix = cx + swayX;
-    const iy = by - 8 - i * itemStep;
-    const itemType = m.carry[i];
-    drawItem(ctx, ix, iy, itemType, FISH_S * 1.1, swayRot, 1, m.t * 5 + i);
+    const ix = pileX + swayX + (i % 2 ? 1.6 : -1.6);
+    const iy = by - 9 - i * itemStep;
+    drawItem(ctx, ix, iy, m.carry[i], itemS, swayRot, 1, m.t * 5 + i);
   }
 
   // Woven Wicker Basket at the base supporting the stack
   ctx.beginPath();
-  ctx.moveTo(cx - 20, by - 6);
-  ctx.lineTo(cx + 20, by - 6);
-  ctx.quadraticCurveTo(cx + 19, by + 10, cx + 13, by + 10);
-  ctx.lineTo(cx - 13, by + 10);
-  ctx.quadraticCurveTo(cx - 19, by + 10, cx - 20, by - 6);
+  ctx.moveTo(pileX - 24, by - 6);
+  ctx.lineTo(pileX + 24, by - 6);
+  ctx.quadraticCurveTo(pileX + 22, by + 11, pileX + 14, by + 11);
+  ctx.lineTo(pileX - 14, by + 11);
+  ctx.quadraticCurveTo(pileX - 22, by + 11, pileX - 24, by - 6);
   ctx.closePath();
   ctx.fillStyle = '#e2a85e';
   ctx.fill();
@@ -647,21 +653,21 @@ function drawCarry(ctx: CanvasRenderingContext2D, m: Cat, p: Pal, mode: 'full' |
   ctx.strokeStyle = 'rgba(138,90,37,.55)';
   ctx.lineWidth = 1.3;
   for (let k = -24; k <= 24; k += 6) {
-    ctx.beginPath(); ctx.moveTo(cx + k, by - 7); ctx.lineTo(cx + k + 8, by + 11); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + k + 8, by - 7); ctx.lineTo(cx + k, by + 11); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pileX + k, by - 7); ctx.lineTo(pileX + k + 8, by + 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pileX + k + 8, by - 7); ctx.lineTo(pileX + k, by + 12); ctx.stroke();
   }
   ctx.restore();
   ctx.lineWidth = 2.2;
   ctx.strokeStyle = OUT;
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(cx - 20, by - 6);
-  ctx.quadraticCurveTo(cx - 19, by + 10, cx - 13, by + 10);
-  ctx.lineTo(cx + 13, by + 10);
-  ctx.quadraticCurveTo(cx + 19, by + 10, cx + 20, by - 6);
+  ctx.moveTo(pileX - 24, by - 6);
+  ctx.quadraticCurveTo(pileX - 22, by + 11, pileX - 14, by + 11);
+  ctx.lineTo(pileX + 14, by + 11);
+  ctx.quadraticCurveTo(pileX + 22, by + 11, pileX + 24, by - 6);
   ctx.stroke();
   ctx.beginPath();
-  ctx.roundRect(cx - 22, by - 9, 44, 6, 3);
+  ctx.roundRect(pileX - 26, by - 9, 52, 6, 3);
   ctx.fillStyle = '#f2c882';
   ctx.fill();
   ctx.stroke();
@@ -670,8 +676,8 @@ function drawCarry(ctx: CanvasRenderingContext2D, m: Cat, p: Pal, mode: 'full' |
   if (n >= m.maxCarry) {
     const topIdx = n - 1;
     const topSwayX = (m.sway * 1.3 + Math.sin(m.phase + topIdx * 0.35) * (0.8 + topIdx * 0.4) * m.mv) * (0.7 + topIdx * 0.28);
-    const topX = cx + topSwayX;
-    const topY = by - 8 - topIdx * itemStep - 17 + Math.sin(m.t * 7) * 2;
+    const topX = pileX + topSwayX + (topIdx % 2 ? 1.6 : -1.6);
+    const topY = by - 9 - topIdx * itemStep - 22 + Math.sin(m.t * 7) * 2;
 
     ctx.save();
     ctx.translate(topX, topY);
@@ -694,7 +700,7 @@ function drawCarry(ctx: CanvasRenderingContext2D, m: Cat, p: Pal, mode: 'full' |
 
   // Paws holding the sides of the basket
   if (mode === 'full') {
-    for (const s of [-1, 1]) ell(ctx, cx + s * 18.5, by - 1, 5.8, 5.8, p.belly, OUT, 2);
+    for (const s of [-1, 1]) ell(ctx, pileX + s * 22, by - 1, 5.8, 5.8, p.belly, OUT, 2);
   }
 }
 
@@ -1950,6 +1956,8 @@ function drawCatInner(ctx: CanvasRenderingContext2D, m: Cat, scale = 1) {
     ctx.restore();
   }
 
+  // The carried pile is drawn over the body but under nothing: the cat holds its wadah in
+  // front of the chest exactly like Monkey Mart (face normally peeks above a short stack).
   if (carryFront) drawCarry(ctx, m, p, rod.on ? 'basket' : 'full');
 
   if (m.exc > 0.5) {
@@ -1966,6 +1974,50 @@ function drawCatInner(ctx: CanvasRenderingContext2D, m: Cat, scale = 1) {
 
   ctx.restore(); // upper body
   ctx.restore(); // root
+}
+
+// ---------------------------------------------------------------
+//  NPC sprite cache
+//  A cat is a LOT of vector paths (outline pass + fill pass, eyes, ears, hat...).
+//  For background cats we rasterise the cat into a small per-cat bitmap and only
+//  refresh it every `ttl` frames. The bitmap is stamped at the cat's live position,
+//  so movement stays perfectly smooth while the CPU cost drops by `ttl` times.
+// ---------------------------------------------------------------
+interface CatSprite { cv: HTMLCanvasElement; cx: CanvasRenderingContext2D; s: number; k: number; tick: number }
+const CAT_SPRITES = new WeakMap<Cat, CatSprite>();
+
+export function drawCatCached(ctx: CanvasRenderingContext2D, m: Cat, scale: number, res: number, ttl = 2) {
+  // never cache the fishing pose (it measures the live transform) or a tall carried stack
+  if (typeof document === 'undefined' || ttl <= 1 || m.rod.on || m.carry.length > 0 || res <= 0) {
+    drawCat(ctx, m, scale);
+    return;
+  }
+  const k = scale * (m.size || 1);
+  const Ly = catLayout(m.build);
+  const above = Math.ceil((Ly.height + 40 + Math.max(0, m.hopY)) * k) + 8;
+  const below = Math.ceil(18 * k) + 4;
+  const halfW = Math.ceil(Math.max(Ly.HW + 42, 64) * k) + 4;
+  const s = Math.max(0.5, Math.min(1.75, res));
+  let e = CAT_SPRITES.get(m);
+  if (!e || e.s !== s || e.k !== k) {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(8, Math.ceil(2 * halfW * s));
+    cv.height = Math.max(8, Math.ceil((above + below) * s));
+    e = { cv, cx: cv.getContext('2d')!, s, k, tick: 0 };
+    CAT_SPRITES.set(m, e);
+  }
+  if (e.tick % ttl === 0) {
+    const c = e.cx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, e.cv.width, e.cv.height);
+    c.setTransform(s, 0, 0, s, e.cv.width / 2, e.cv.height - below * s);
+    const ox = m.x, oy = m.y;
+    m.x = 0; m.y = 0;
+    drawCat(c, m, scale);
+    m.x = ox; m.y = oy;
+  }
+  e.tick++;
+  ctx.drawImage(e.cv, m.x - halfW, m.y - above, 2 * halfW, above + below);
 }
 
 /** Draws a cat. Per-cat build overrides (fat / kid / kitten ...) and size are applied here. */

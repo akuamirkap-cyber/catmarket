@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------
 //  Crab / seaweed / ice-cream / shopping bag / mood emoji / bubbles + layout of the new stalls
 // ---------------------------------------------------------------
-import { drawFish, drawMango, drawSushi, registerItem } from './fish';
+import { drawFish, drawMango, drawSushi, registerItem, FISH_S } from './fish';
 import { sprite } from './sprites';
 import { drawKelpItem, drawKelpPlant } from './kelp';
 import { drawSignCached, paintSign } from './signs';
@@ -285,8 +285,8 @@ export function drawBag(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
 
 // ---------------- item registry (carried by the player)
 registerItem(5, (ctx, x, y, s, rot) => drawSeaweedItem(ctx, x, y, s * 0.95, rot));
-registerItem(6, (ctx, x, y, _s, rot, dir) => drawCrabSprite(ctx, x, y, CRAB_S, false, 0, rot * 0.4, dir));
-registerItem(7, (ctx, x, y, _s, rot, dir) => drawCrabSprite(ctx, x, y, CRAB_S, true, 0, rot * 0.4, dir));
+registerItem(6, (ctx, x, y, s, rot, dir) => drawCrabSprite(ctx, x, y, (s / FISH_S) * CRAB_S, false, 0, rot * 0.4, dir));
+registerItem(7, (ctx, x, y, s, rot, dir) => drawCrabSprite(ctx, x, y, (s / FISH_S) * CRAB_S, true, 0, rot * 0.4, dir));
 
 // ---------------- farm / pen painters
 export function drawFarmBed(ctx: CanvasRenderingContext2D, R0: R, state: string, t: number, idx: number) {

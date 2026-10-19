@@ -8,11 +8,47 @@
 //  6. Sunbathing cats truly LYING DOWN (rebahan/tiduran santai) on towels
 //  7. Sun from the LEFT: all shadows cast to the RIGHT, umbrellas angled to the left!
 // ---------------------------------------------------------------
-import { drawCat, makeCat, CUSTOMER_PALS, type Cat, type Pal } from './cat';
+import { drawCat, drawCatCached, makeCat, CUSTOMER_PALS, type Cat, type Pal } from './cat';
 
 const PI = Math.PI;
 const PI2 = Math.PI * 2;
 const OUT = '#58244a';
+
+// ---------------------------------------------------------------
+//  Background-sprite cache
+//  The beach scenes below are built from hundreds of vector paths plus one or
+//  more full cats. Re-tracing all of that every single frame is what made the
+//  playground zone lag, so each self-contained scene is rasterised into a small
+//  bitmap and refreshed every `ttl` frames (20-30 fps for background props).
+// ---------------------------------------------------------------
+interface SceneCache { cv: HTMLCanvasElement; cx: CanvasRenderingContext2D; w: number; h: number; s: number; tick: number; drawn: boolean }
+const SCENE_CACHE = new Map<string, SceneCache>();
+
+function cachedScene(
+  ctx: CanvasRenderingContext2D, key: string, bx: number, by: number, bw: number, bh: number,
+  res: number, ttl: number, draw: (c: CanvasRenderingContext2D) => void,
+) {
+  if (typeof document === 'undefined' || res <= 0) { draw(ctx); return; }
+  const s = Math.max(0.5, Math.min(1.25, res));
+  const w = Math.ceil(bw * s), h = Math.ceil(bh * s);
+  let e = SCENE_CACHE.get(key);
+  if (!e || e.s !== s || e.w !== w || e.h !== h) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    e = { cv, cx: cv.getContext('2d')!, w, h, s, tick: 0, drawn: false };
+    SCENE_CACHE.set(key, e);
+  }
+  e.tick++;
+  if (!e.drawn || e.tick % ttl === 0) {
+    const c = e.cx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, e.w, e.h);
+    c.setTransform(s, 0, 0, s, -bx * s, -by * s);
+    draw(c);
+    e.drawn = true;
+  }
+  ctx.drawImage(e.cv, bx, by, bw, bh);
+}
 
 function ell(c: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, fill: string, stroke?: string, lw = 1.6) {
   c.beginPath();
@@ -25,7 +61,11 @@ function ell(c: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: 
 // ---------------------------------------------------------------
 //  1. MAIN PASIR: 2X GRAND SANDCASTLE & ANIMATED SCOOPING & PATTING CAT
 // ---------------------------------------------------------------
-export function drawSandPlayCat(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, pal: Pal) {
+export function drawSandPlayCat(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, pal: Pal, res = 0, ttl = 2) {
+  if (res > 0) {
+    cachedScene(ctx, `sand:${x}:${y}`, x - 175, y - 265, 430, 335, res, ttl, (c) => drawSandPlayCat(c, x, y, t, pal, 0));
+    return;
+  }
   ctx.save();
   ctx.translate(x, y);
 
@@ -219,7 +259,11 @@ export function drawSandPlayCat(ctx: CanvasRenderingContext2D, x: number, y: num
 // ---------------------------------------------------------------
 //  2. BERSELANCAR: DYNAMIC SURFING CATS (Carving Ocean Waves + Feet Firmly Planted)
 // ---------------------------------------------------------------
-export function drawSurfingCat(ctx: CanvasRenderingContext2D, baseX: number, baseY: number, t: number, pal: Pal, id: number) {
+export function drawSurfingCat(ctx: CanvasRenderingContext2D, baseX: number, baseY: number, t: number, pal: Pal, id: number, res = 0, ttl = 2) {
+  if (res > 0) {
+    cachedScene(ctx, `surf:${baseX}:${baseY}:${id}`, baseX - 225, baseY - 165, 450, 250, res, ttl, (c) => drawSurfingCat(c, baseX, baseY, t, pal, id, 0));
+    return;
+  }
   // Leluasa berselancar: Carves across the ocean with wide sweep!
   const sweep = Math.sin(t * 0.95 + id * 2.1) * 85;
   const curX = baseX + sweep;
@@ -325,7 +369,11 @@ export function drawSurfingCat(ctx: CanvasRenderingContext2D, baseX: number, bas
 // ---------------------------------------------------------------
 //  3. MAIN LAYANGAN: KUCING SANTAI MENIKMATI LAYANGAN TERBANG DI PANTAI
 // ---------------------------------------------------------------
-export function drawKiteFlyingCat(ctx: CanvasRenderingContext2D, baseX: number, groundY: number, t: number, pal: Pal, kiteType: 'fish' | 'diamond', id = 0) {
+export function drawKiteFlyingCat(ctx: CanvasRenderingContext2D, baseX: number, groundY: number, t: number, pal: Pal, kiteType: 'fish' | 'diamond', id = 0, res = 0, ttl = 2) {
+  if (res > 0) {
+    cachedScene(ctx, `kite:${baseX}:${groundY}:${kiteType}:${id}`, baseX - 300, groundY - 265, 480, 340, res, ttl, (c) => drawKiteFlyingCat(c, baseX, groundY, t, pal, kiteType, id, 0));
+    return;
+  }
   // Relaxed 24-second beach routine:
   // Phase 1 (0s - 16s, 67%): Berdiri santai di pasir hangat, menarik ulur benang perlahan, memandangi layangan meliuk anggun
   // Phase 2 (16s - 21s, 21%): Berjalan santai pelan (calm stroll) menikmati angin sepoi-sepoi pantai
@@ -474,7 +522,11 @@ export function drawKiteFlyingCat(ctx: CanvasRenderingContext2D, baseX: number, 
 //  4. BERJEMUR: KUCING BENAR-BENAR TIDURAN (REBAHAN DI HANDUK)
 //     Sun on the LEFT -> Umbrella tilted LEFT, Shadow cast to RIGHT!
 // ---------------------------------------------------------------
-export function drawSunbathingCat(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, pal: Pal, towelCol: string) {
+export function drawSunbathingCat(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, pal: Pal, towelCol: string, res = 0, ttl = 3) {
+  if (res > 0) {
+    cachedScene(ctx, `sun:${x}:${y}`, x - 125, y - 145, 250, 200, res, ttl, (c) => drawSunbathingCat(c, x, y, t, pal, towelCol, 0));
+    return;
+  }
   ctx.save();
   ctx.translate(x, y);
 
@@ -623,8 +675,12 @@ export function updateVolleyball(vg: VolleyballGame, dt: number) {
   }
 }
 
-export function drawVolleyballCourt(ctx: CanvasRenderingContext2D, vg: VolleyballGame, t: number) {
+export function drawVolleyballCourt(ctx: CanvasRenderingContext2D, vg: VolleyballGame, t: number, res = 0, ttl = 2) {
   const { courtX: x, courtY: y } = vg;
+  if (res > 0) {
+    cachedScene(ctx, `volley:${x}:${y}`, x - 245, y - 180, 490, 285, res, ttl, (c) => drawVolleyballCourt(c, vg, t, 0));
+    return;
+  }
 
   ctx.save();
   ctx.translate(x, y);
@@ -837,8 +893,10 @@ export function updatePlaygroundCats(cats: PlaygroundCat[], dt: number) {
   }
 }
 
-export function drawPlaygroundCatItem(ctx: CanvasRenderingContext2D, pc: PlaygroundCat, t: number) {
-  const cat = makeCat(0, 0, pc.pal);
+const PG_CATS = new WeakMap<PlaygroundCat, Cat>();
+export function drawPlaygroundCatItem(ctx: CanvasRenderingContext2D, pc: PlaygroundCat, t: number, res = 0, ttl = 2) {
+  let cat = PG_CATS.get(pc);
+  if (!cat) { cat = makeCat(0, 0, pc.pal); PG_CATS.set(pc, cat); }
   cat.t = t;
   cat.size = pc.size;
   cat.build = pc.build;
@@ -859,7 +917,7 @@ export function drawPlaygroundCatItem(ctx: CanvasRenderingContext2D, pc: Playgro
 
   ctx.save();
   ctx.translate(pc.x, pc.y);
-  drawCat(ctx, cat, 0.78);
+  drawCatCached(ctx, cat, 0.78, res, ttl);
 
   // Playful props per mode
   if (pc.mode === 'ball') {

@@ -1,5 +1,5 @@
 import {
-  CASHIER_PAL, CHEF_PAL, VENDOR_PAL, CUSTOMER_PALS, CAT_CFG, Cat, type CatCfg, type HatId, type SkinId, catLayout, DEFAULT_CFG, setCatCfg, makePlayerPal, clamp, drawCat, hopCat, makeCat, postUpdate, updateCat,
+  CASHIER_PAL, CHEF_PAL, VENDOR_PAL, CUSTOMER_PALS, CAT_CFG, Cat, type CatCfg, type HatId, type SkinId, catLayout, DEFAULT_CFG, setCatCfg, makePlayerPal, clamp, drawCat, drawCatCached, hopCat, makeCat, postUpdate, updateCat,
 } from './cat';
 import { HELPER_PALS, FISHER_PAL, catHandPos, type Pal } from './cat';
 import {
@@ -22,7 +22,7 @@ import {
   drawSandPlayCat, drawSurfingCat, drawSunbathingCat, drawKiteFlyingCat,
   makePlaygroundCats, updatePlaygroundCats, drawPlaygroundCatItem, type PlaygroundCat,
 } from './playground';
-import { paintSign } from './signs';
+import { drawSignCached } from './signs';
 import {
   APPLE_POS, ASSIST_HOME, ASSIST_ZONE, BLENDER, BOAT_DOCK, BOAT_ZONE, JUICE, JUICE_ZONE, JUICEQ, ORANGE_POS, WAGON_H,
   cupSlot, drawBlenderDyn, drawBoat, drawCup, drawFruit, drawFruitTree, drawWagon, paintJuiceStall,
@@ -76,7 +76,6 @@ interface Customer {
   m: Cat; kind: Kind; variant: Variant; mul: number; state: CState; want: number; taken: number[]; pending: number; timer: number; speed: number;
   way: Pt[]; arrived: boolean; waitT: number; drool: boolean; happyT: number; bubT: number; uid: number; wag?: Pt;
 }
-interface CatCache { cv: HTMLCanvasElement; cx: CanvasRenderingContext2D; s: number; look: number }
 type ChefPhase = 'idle' | 'fetch' | 'chop' | 'form' | 'cheer';
 type UnlId = 'spot2' | 'spot3' | 'sushi' | 'orchard' | 'cashier' | 'crab' | 'ice' | 'juice' | 'assist' | 'boat';
 interface Unl { id: UnlId; cost: number; paid: number; done: boolean; bt: number; zone: Rect; label: string; icon: string; act: number }
@@ -165,6 +164,7 @@ export class Game {
   private H = 0;
   private dprMax = 1;
   private rs = 1; // adaptive render-scale
+  private npcTtl = 2; // how many frames a background-cat/scene bitmap is reused (adaptive)
   private hq = true; // adaptive effects quality
   private scale = 1;
   private cam = { x: 700, y: 460 };
@@ -345,7 +345,6 @@ export class Game {
   private fisher: Cat | null = null;
   private uidN = 0;
   private frameN = 0;
-  private catCache = new WeakMap<Customer, CatCache>();
   private skin: SkinId = 'tabby';
   private hat: HatId = 'bucket';
   private skatesOwned = false;
@@ -386,6 +385,13 @@ export class Game {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
+    // Phones & small screens start in the lighter quality tier right away: waiting for the
+    // adaptive monitor to react would mean several laggy seconds after every load.
+    const small = typeof window !== 'undefined' && (
+      window.innerWidth < 900 ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
+    );
+    if (small) { this.rs = 0.8; this.hq = false; }
     this.player = makeCat(720, 470, makePlayerPal('tabby', 'bucket'));
     this.chefCat = makeCat(CHEF_POS.x, CHEF_POS.y, CHEF_PAL);
     this.chefCat.chef.on = true;
@@ -415,7 +421,7 @@ export class Game {
       this.coolT -= dt;
       this.fpsT += dt;
       if (this.perfT > 1.5) { this.perfT = 0; this.adapt(); }
-      if (this.fpsT > 0.4) { this.fpsT = 0; this.onFps(Math.round(1000 / Math.max(1, this.ema)), (this.hq ? 'HQ' : 'LQ') + ' ' + Math.round(this.rs * 100) + '%'); }
+      if (this.fpsT > 1.0) { this.fpsT = 0; this.onFps(Math.round(1000 / Math.max(1, this.ema)), (this.hq ? 'HQ' : 'LQ') + ' ' + Math.round(this.rs * 100) + '%'); }
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
@@ -562,10 +568,12 @@ export class Game {
   // ------------------------------------------------ adaptive performance (ultra smooth)
   private adapt() {
     if (this.coolT > 0) return;
-    if (this.ema > 30) {
-      if (this.hq) { this.hq = false; this.coolT = 3.0; }
-      else if (this.rs > 0.75) { this.rs = Math.max(0.75, this.rs - 0.1); this.coolT = 3.0; this.applySize(); }
-    } else if (this.ema < 22 && this.cpuEma < 8) {
+    if (this.ema > 24 || this.cpuEma > 13) {
+      if (this.hq) { this.hq = false; this.coolT = 2.0; }
+      else if (this.rs > 0.55) { this.rs = Math.max(0.55, this.rs - 0.1); this.coolT = 2.0; this.applySize(); }
+      else if (this.npcTtl < 4) { this.npcTtl++; this.coolT = 2.0; }
+    } else if (this.ema < 19 && this.cpuEma < 7) {
+      if (this.npcTtl > 2 && this.cpuEma < 6) { this.npcTtl--; this.coolT = 4; }
       if (this.rs < 1) { this.rs = Math.min(1, this.rs + 0.1); this.coolT = 5; this.applySize(); }
       else if (!this.hq && this.cpuEma < 6) { this.hq = true; this.coolT = 6; }
     }
@@ -594,7 +602,14 @@ export class Game {
   };
   private onKeyUp = (e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()); };
   private onBlur = () => { this.keys.clear(); this.joy.active = false; };
-  private onResize = () => this.resize();
+  private resizeTimer = 0;
+  private onResize = () => {
+    // Mobile browsers fire a burst of resize events while the address bar slides away;
+    // re-allocating the canvas and rebuilding every cached layer on each one caused a
+    // visible freeze, so settle first and resize once.
+    if (this.resizeTimer) clearTimeout(this.resizeTimer);
+    this.resizeTimer = setTimeout(() => { this.resizeTimer = 0; this.resize(); }, 120) as unknown as number;
+  };
   private onPD = (e: PointerEvent) => {
     sfx.unlock(); sfx.startAmbience();
     if (this.joy.active) return;
@@ -625,6 +640,7 @@ export class Game {
 
   destroy() {
     cancelAnimationFrame(this.raf);
+    if (this.resizeTimer) clearTimeout(this.resizeTimer);
     this.save();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
@@ -637,10 +653,16 @@ export class Game {
   }
 
   private resize() {
-    this.dprMax = Math.min(1.75, window.devicePixelRatio || 1);
+    // 1.5x is plenty for this flat cartoon art: 1.75x burned ~35% more fill-rate for a
+    // difference nobody can see on a phone, which was one of the main lag sources.
+    this.dprMax = Math.min(1.5, window.devicePixelRatio || 1);
     this.W = this.canvas.clientWidth;
     this.H = this.canvas.clientHeight;
     this.scale = Math.max(this.W / 1000, this.H / 620, 0.8) * ZOOM;
+    // hard pixel budget for huge desktop windows / 4K screens
+    const budget = 2_600_000;
+    const px = this.W * this.H * this.dprMax * this.dprMax;
+    if (px > budget) this.dprMax = Math.max(0.75, this.dprMax * Math.sqrt(budget / px));
     this.applySize();
     const base = this.scale * this.dprMax;
     const res = clamp(Math.ceil(base * 4) / 4, 0.75, 1.5);
@@ -2064,7 +2086,7 @@ export class Game {
 
     this.statusT -= dt;
     if (this.statusT <= 0) {
-      this.statusT = 0.1;
+      this.statusT = 0.2;
       const st = this.getStatus();
       const key = JSON.stringify(st);
       if (key !== this.statusKey) { this.statusKey = key; this.onStatus(st); }
@@ -2996,12 +3018,12 @@ export class Game {
         if (inV(tr.x, tr.y, 150)) items.push({ y: tr.y, draw: () => drawFruitTree(ctx, tr.x, tr.y, this.time, tr.fruit, tr.pop, clamp((juiceU.bt - i * 0.15) / 0.7, 0, 1), tr.kind) });
       });
     }
-    for (const w of this.helpers) if (inV(w.m.x, w.m.y, 120)) items.push({ y: w.m.y, draw: () => { drawCat(ctx, w.m, MS); this.drawHelperTag(ctx, w); } });
+    for (const w of this.helpers) if (inV(w.m.x, w.m.y, 120)) items.push({ y: w.m.y, draw: () => { drawCatCached(ctx, w.m, MS, s, this.npcTtl + 1); this.drawHelperTag(ctx, w); } });
     if (this.isDone('boat') && this.boat.state !== 'far' && inV(this.boat.x, BOAT_DOCK.y, 170)) items.push({ y: BOAT_DOCK.y + 20, draw: () => this.drawBoatItem(ctx) });
     // Free-standing wooden signs (depth-sorted with cats so no cat stands on top of a sign!)
-    if (inV(790, 160, 240)) items.push({ y: 230, draw: () => paintSign(ctx, 790, 128, 'CAT FISH MARKET', { w: 380, h: 80, c1: '#4fc3ee', c2: '#2a9fd8', posts: 62, icon: fishIcon(0, 1), iconR: fishIcon(2, -1) }) });
+    if (inV(790, 160, 240)) items.push({ y: 230, draw: () => drawSignCached(ctx, 'market', 790, 128, 'CAT FISH MARKET', { w: 380, h: 80, c1: '#4fc3ee', c2: '#2a9fd8', posts: 62, icon: fishIcon(0, 1), iconR: fishIcon(2, -1) }) });
     // SELAMAT DATANG signboard placed proudly beside Lapak Udang Bakar in Zona 2!
-    if (inV(3120, 360, 240)) items.push({ y: 428, draw: () => paintSign(ctx, 3120, 360, 'SELAMAT DATANG 🐱\nKE PASAR KUCING', { w: 230, h: 62, c1: '#ff9fc1', c2: '#ff5f98', posts: 68, sub: '◀ SILAKAN MASUK' }) });
+    if (inV(3120, 360, 240)) items.push({ y: 428, draw: () => drawSignCached(ctx, 'welcome', 3120, 360, 'SELAMAT DATANG 🐱\nKE PASAR KUCING', { w: 230, h: 62, c1: '#ff9fc1', c2: '#ff5f98', posts: 68, sub: '◀ SILAKAN MASUK' }) });
     // Beach Bus Stop & Parked 2x Cat Bus (facing up in the sidewalk bus bay)
     if (inV(BUS_STOP.x, BUS_STOP.y, 140)) items.push({ y: BUS_STOP.y + 12, draw: () => drawBusStop(ctx, BUS_STOP.x, BUS_STOP.y) });
     if (inV(BUS_POS.x, BUS_POS.y, 260)) items.push({ y: BUS_POS.y + 115, draw: () => drawCatBus(ctx, BUS_POS.x, BUS_POS.y, this.time) });
@@ -3013,7 +3035,7 @@ export class Game {
 
     if (inV(COUNTER.x + 125, COUNTER.y, 260)) {
       if (this.cashier) items.push({ y: CASHIER_POS.y, draw: () => {
-        this.popped(ctx, CASHIER_POS, cashU.bt, () => drawCat(ctx, this.cashier!, MS));
+        this.popped(ctx, CASHIER_POS, cashU.bt, () => drawCatCached(ctx, this.cashier!, MS, s, this.npcTtl + 1));
         if (cashU.bt > 0.7) {
           const cm = this.cashier!, ty = cm.y - (catLayout().height + 6) * MS - 12;
           ctx.beginPath(); ctx.roundRect(cm.x - 25, ty - 9, 50, 18, 9); ctx.fillStyle = '#2b8aa8'; ctx.fill();
@@ -3037,23 +3059,23 @@ export class Game {
     items.push({ y: 745, draw: () => { drawRock(ctx, 1700, 745, 1.3); drawCoral(ctx, 1668, 750, 0.9, '#ff7aa8'); } });
 
     // Zone 3 Beach Playground: Surfing, Sand play, Kite flying
-    if (inV(160, ZY + 360, 180)) items.push({ y: ZY + 370, draw: () => drawSurfingCat(ctx, 160, ZY + 360, this.time, CUSTOMER_PALS[2], 0) });
-    if (inV(240, ZY + 680, 180)) items.push({ y: ZY + 690, draw: () => drawSurfingCat(ctx, 240, ZY + 680, this.time, CUSTOMER_PALS[4], 1) });
-    if (inV(620, ZY + 480, 140)) items.push({ y: ZY + 490, draw: () => drawSandPlayCat(ctx, 620, ZY + 480, this.time, CUSTOMER_PALS[0]) });
-    if (inV(1140, ZY + 620, 140)) items.push({ y: ZY + 630, draw: () => drawSandPlayCat(ctx, 1140, ZY + 620, this.time, CUSTOMER_PALS[1]) });
-    if (inV(840, ZY + 340, 180)) items.push({ y: ZY + 350, draw: () => drawKiteFlyingCat(ctx, 840, ZY + 340, this.time, CUSTOMER_PALS[3], 'fish', 0) });
-    if (inV(1420, ZY + 540, 180)) items.push({ y: ZY + 550, draw: () => drawKiteFlyingCat(ctx, 1420, ZY + 540, this.time, CUSTOMER_PALS[5], 'diamond', 1) });
+    if (inV(160, ZY + 360, 180)) items.push({ y: ZY + 370, draw: () => drawSurfingCat(ctx, 160, ZY + 360, this.time, CUSTOMER_PALS[2], 0, s, this.npcTtl) });
+    if (inV(240, ZY + 680, 180)) items.push({ y: ZY + 690, draw: () => drawSurfingCat(ctx, 240, ZY + 680, this.time, CUSTOMER_PALS[4], 1, s, this.npcTtl) });
+    if (inV(620, ZY + 480, 140)) items.push({ y: ZY + 490, draw: () => drawSandPlayCat(ctx, 620, ZY + 480, this.time, CUSTOMER_PALS[0], s, this.npcTtl) });
+    if (inV(1140, ZY + 620, 140)) items.push({ y: ZY + 630, draw: () => drawSandPlayCat(ctx, 1140, ZY + 620, this.time, CUSTOMER_PALS[1], s, this.npcTtl) });
+    if (inV(840, ZY + 340, 180)) items.push({ y: ZY + 350, draw: () => drawKiteFlyingCat(ctx, 840, ZY + 340, this.time, CUSTOMER_PALS[3], 'fish', 0, s, this.npcTtl) });
+    if (inV(1420, ZY + 540, 180)) items.push({ y: ZY + 550, draw: () => drawKiteFlyingCat(ctx, 1420, ZY + 540, this.time, CUSTOMER_PALS[5], 'diamond', 1, s, this.npcTtl) });
 
     // Zone 4 Beach Resort: Volleyball Court, Sunbathing cats
-    if (inV(2260, ZY + 450, 260)) items.push({ y: ZY + 450, draw: () => drawVolleyballCourt(ctx, this.volleyball, this.time) });
-    if (inV(2680, ZY + 360, 140)) items.push({ y: ZY + 370, draw: () => drawSunbathingCat(ctx, 2680, ZY + 360, this.time, CUSTOMER_PALS[1], '#ff7aa8') });
-    if (inV(2920, ZY + 560, 140)) items.push({ y: ZY + 570, draw: () => drawSunbathingCat(ctx, 2920, ZY + 560, this.time, CUSTOMER_PALS[3], '#4ea8e8') });
-    if (inV(2520, ZY + 700, 140)) items.push({ y: ZY + 710, draw: () => drawSunbathingCat(ctx, 2520, ZY + 700, this.time, CUSTOMER_PALS[5], '#ffd24a') });
-    if (inV(1960, ZY + 640, 140)) items.push({ y: ZY + 650, draw: () => drawSandPlayCat(ctx, 1960, ZY + 640, this.time, CUSTOMER_PALS[4]) });
+    if (inV(2260, ZY + 450, 260)) items.push({ y: ZY + 450, draw: () => drawVolleyballCourt(ctx, this.volleyball, this.time, s, this.npcTtl) });
+    if (inV(2680, ZY + 360, 140)) items.push({ y: ZY + 370, draw: () => drawSunbathingCat(ctx, 2680, ZY + 360, this.time, CUSTOMER_PALS[1], '#ff7aa8', s, this.npcTtl) });
+    if (inV(2920, ZY + 560, 140)) items.push({ y: ZY + 570, draw: () => drawSunbathingCat(ctx, 2920, ZY + 560, this.time, CUSTOMER_PALS[3], '#4ea8e8', s, this.npcTtl) });
+    if (inV(2520, ZY + 700, 140)) items.push({ y: ZY + 710, draw: () => drawSunbathingCat(ctx, 2520, ZY + 700, this.time, CUSTOMER_PALS[5], '#ffd24a', s, this.npcTtl) });
+    if (inV(1960, ZY + 640, 140)) items.push({ y: ZY + 650, draw: () => drawSandPlayCat(ctx, 1960, ZY + 640, this.time, CUSTOMER_PALS[4], s, this.npcTtl) });
 
     // Roaming kittens & playful cats in the playground
     for (const pc of this.playgroundCats) {
-      if (inV(pc.x, pc.y, 80)) items.push({ y: pc.y, draw: () => drawPlaygroundCatItem(ctx, pc, this.time) });
+      if (inV(pc.x, pc.y, 80)) items.push({ y: pc.y, draw: () => drawPlaygroundCatItem(ctx, pc, this.time, s, this.npcTtl) });
     }
     for (const c of this.customers) if (inV(c.m.x, c.m.y, 120)) items.push({ y: c.m.y, draw: () => { this.drawWagonOf(ctx, c); this.drawCustomer(ctx, c); this.drawHeld(ctx, c); } });
     if (this.treasure && this.treasure.state !== 'fall') { const tr = this.treasure; items.push({ y: tr.y, draw: () => this.drawTreasureLanded(ctx, tr) }); }
@@ -3197,8 +3219,12 @@ export class Game {
   }
 
   /**
-   * Soft bloom. The bright parts of the finished frame are shrunk (1/10), blurred a little and screened back on top.
-   * A horizontal mask keeps the glow around the sea / water / shore and fades it smoothly to a light touch on land.
+   * Soft bloom, filter-free.
+   * The finished frame is shrunk 1/12 (which already blurs it a lot), the highlights are
+   * pushed up with a couple of cheap additive passes and the result is scaled back up with
+   * smoothing. No canvas `filter` is used: `brightness()/contrast()/blur()` on the main
+   * canvas forces an expensive readback on mobile GPUs and was eating ~half of the frame.
+   * A horizontal mask keeps the glow around the sea / water / shore.
    */
   private drawBloom(ctx: CanvasRenderingContext2D) {
     if (!this.hq || typeof document === 'undefined') return;
@@ -3207,7 +3233,7 @@ export class Game {
     const WCUT = 1000; // the glow has faded to nothing by here, so nothing is drawn beyond it
     const dxMax = Math.min(cw, Math.ceil((WCUT - this.V.x0) * cs));
     if (dxMax <= 8) return; // looking at far-away land only: no bloom needed
-    const bw = Math.max(8, Math.round(cw / 10)), bh = Math.max(8, Math.round(ch / 10));
+    const bw = Math.max(8, Math.round(cw / 12)), bh = Math.max(8, Math.round(ch / 12));
     if (!this.bloomCv || this.bloomCv.width !== bw || this.bloomCv.height !== bh || !this.bloomMask) {
       this.bloomCv = document.createElement('canvas');
       this.bloomCv.width = bw; this.bloomCv.height = bh;
@@ -3218,34 +3244,40 @@ export class Game {
     }
     const b = this.bloomCtx, m = this.bloomMaskCtx;
     if (!b || !m) return;
-    const hasFilter = 'filter' in b;
-    // 1) the bright parts only
-    b.globalCompositeOperation = 'copy';
-    if (hasFilter) b.filter = 'brightness(0.64) contrast(5)';
-    b.imageSmoothingEnabled = true;
-    b.imageSmoothingQuality = 'low';
-    b.drawImage(this.canvas, 0, 0, cw, ch, 0, 0, bw, bh);
-    if (hasFilter) b.filter = 'none';
-    b.globalCompositeOperation = 'source-over';
-    // 2) soften + fade by position: full strength over the water, a light touch on land
-    m.globalCompositeOperation = 'copy';
-    if (hasFilter) m.filter = 'blur(1.3px)';
-    m.drawImage(this.bloomCv, 0, 0);
-    if (hasFilter) m.filter = 'none';
-    m.globalCompositeOperation = 'destination-in';
-    const px = this.scale * this.dprMax * this.rs * (bw / cw); // world unit -> mask pixel
-    const toX = (wx: number) => (wx - this.V.x0) * px;
-    const g = m.createLinearGradient(toX(400), 0, toX(760), 0);
-    g.addColorStop(0, 'rgba(0,0,0,1)');
-    g.addColorStop(0.5, 'rgba(0,0,0,0.2)');
-    g.addColorStop(1, 'rgba(0,0,0,0.06)');
-    m.fillStyle = g;
-    m.fillRect(0, 0, bw, bh);
-    m.globalCompositeOperation = 'source-over';
+    // Reading the finished frame back is the expensive part (it forces a full-canvas
+    // snapshot, which is very slow on mobile GPUs): refresh the glow every 4th frame and
+    // keep stamping the previous one in between. Nobody can tell at this softness.
+    if (this.frameN % 4 === 0) {
+      b.globalCompositeOperation = 'copy';
+      b.imageSmoothingEnabled = true;
+      b.imageSmoothingQuality = 'low';
+      b.drawImage(this.canvas, 0, 0, cw, ch, 0, 0, bw, bh);
+      // push the highlights: two additive passes clip the bright sea/foam towards white
+      // while the dark parts stay dark, mimicking brightness + contrast without filters
+      b.globalCompositeOperation = 'lighter';
+      b.globalAlpha = 0.85;
+      b.drawImage(this.bloomCv, 0, 0);
+      b.drawImage(this.bloomCv, 0, 0);
+      b.globalAlpha = 1;
+      b.globalCompositeOperation = 'source-over';
+      // fade by position: full strength over the water, a light touch on land
+      m.globalCompositeOperation = 'copy';
+      m.drawImage(this.bloomCv, 0, 0);
+      m.globalCompositeOperation = 'destination-in';
+      const px = this.scale * this.dprMax * this.rs * (bw / cw); // world unit -> mask pixel
+      const toX = (wx: number) => (wx - this.V.x0) * px;
+      const g = m.createLinearGradient(toX(400), 0, toX(760), 0);
+      g.addColorStop(0, 'rgba(0,0,0,1)');
+      g.addColorStop(0.5, 'rgba(0,0,0,0.22)');
+      g.addColorStop(1, 'rgba(0,0,0,0.06)');
+      m.fillStyle = g;
+      m.fillRect(0, 0, bw, bh);
+      m.globalCompositeOperation = 'source-over';
+    }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = hasFilter ? 0.26 : 0.05;
+    ctx.globalAlpha = 0.3;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'low';
     const sxMax = Math.min(bw, Math.ceil((dxMax * bw) / cw));
@@ -3516,6 +3548,9 @@ export class Game {
     this.badge(ctx, MANGO.x + MANGO.w / 2, MANGO.y + MANGO.h - MANGO.H + 19, full ? 'FULL' : `${this.mangoStock.length}/${MANGO.cap}`, full ? '#3fae49' : '#fff', full ? '#fff' : '#c46a00');
   }
 
+  /** screen pixels per world unit (used by the sprite caches) */
+  private get pxScale() { return this.scale * this.dprMax * this.rs; }
+
   private drawSushiBar(ctx: CanvasRenderingContext2D, V: View) {
     const u = this.unls[2];
     const mid = { x: SUSHI.x + SUSHI.w / 2, y: SUSHI.y + SUSHI.h };
@@ -3527,7 +3562,7 @@ export class Game {
       drawItem(ctx, s.x, s.y, this.sushiIn[i], FISH_S, ((i * 29) % 5) * 0.03 - 0.06, i % 2 ? -1 : 1, 0);
     }
     // the chef stands behind the board (the board is drawn over his feet)
-    drawCat(ctx, this.chefCat, MS);
+    drawCatCached(ctx, this.chefCat, MS, this.pxScale, this.npcTtl);
     // cutting board (bounces when the knife hits)
     const bo = this.ch.bounce * 2;
     ctx.globalAlpha = 0.2;
@@ -3723,7 +3758,7 @@ export class Game {
 
   private drawIceStall(ctx: CanvasRenderingContext2D, V: View) {
     const u = this.unls[6];
-    if (this.vendor && u.bt >= 0.7) drawCat(ctx, this.vendor, MS); // behind the cart: the cart is drawn over his legs
+    if (this.vendor && u.bt >= 0.7) drawCatCached(ctx, this.vendor, MS, this.pxScale, this.npcTtl + 1); // behind the cart: the cart is drawn over his legs
     this.popped(ctx, { x: ICE.x + ICE.w / 2, y: ICE.y + ICE.h }, u.bt, () => this.layers.ice.draw(ctx, V));
   }
 
@@ -3733,34 +3768,11 @@ export class Game {
    */
   private drawCustomer(ctx: CanvasRenderingContext2D, c: Customer) {
     const m = c.m;
-    const still = m.speed < 6 && m.hopY < 0.4 && m.hopV === 0 && Math.abs(m.sq) < 0.03 && !m.skidding && typeof document !== 'undefined';
-    if (!still) { drawCat(ctx, m, MS); return; }
-    const s = Math.min(2, this.scale * this.dprMax * this.rs);
-    const BX = 65, BY = 118, BW = 130, BH = 132;
-    let e = this.catCache.get(c);
-    const look = Math.round((m.fx + 2) * 10) * 100 + Math.round((m.fy + 2) * 10);
-    if (!e) {
-      const cv = document.createElement('canvas');
-      e = { cv, cx: cv.getContext('2d')!, s: 0, look: -1 };
-      this.catCache.set(c, e);
-    }
-    if (e.s !== s || e.look !== look || (this.frameN + c.uid) % 3 === 0) {
-      if (e.s !== s) { e.cv.width = Math.ceil(BW * s); e.cv.height = Math.ceil(BH * s); e.s = s; }
-      const cx = e.cx;
-      cx.setTransform(1, 0, 0, 1, 0, 0);
-      cx.clearRect(0, 0, e.cv.width, e.cv.height);
-      cx.setTransform(s, 0, 0, s, BX * s, BY * s);
-      const ox = m.x, oy = m.y;
-      m.x = 0; m.y = 0;
-      drawCat(cx, m, MS);
-      m.x = ox; m.y = oy;
-      e.look = look;
-    }
-    // snap to whole screen pixels so the bitmap is not blurred by sub-pixel sampling
-    const s0 = this.scale * this.dprMax * this.rs;
-    const px = Math.round((m.x - BX - this.V.x0) * s0) / s0 + this.V.x0;
-    const py = Math.round((m.y - BY - this.V.y0) * s0) / s0 + this.V.y0;
-    ctx.drawImage(e.cv, px, py, e.cv.width / s, e.cv.height / s);
+    const s = Math.min(2, this.pxScale);
+    // Walking cats and their idle animation (breathing, blinking, tail) now go through the
+    // shared per-cat sprite cache, so a whole queue costs a handful of bitmap stamps
+    // instead of re-tracing every cat's 400+ vector paths on every frame.
+    drawCatCached(ctx, m, MS, s, 2);
   }
 
   /** the plastic shopping bag (with the products inside), or the ice-cream cone, in the cat's hand */
