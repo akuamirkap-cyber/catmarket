@@ -1,0 +1,26 @@
+PERINTAH PART 1 - CAT FISH MARKET BEACH RESORT
+==================================================
+Teks Perintah Asli Pengguna:
+"SAYA MAU KM SIMPAN PERINTAH SAYA INI DI FILE TEXT TERSENDIRI INI ADL PART 1: SAYA MAU TUMPUKAN YG SAYA BAWA TU DITUMPUK KEK GINI UNTUK IKAN BUAH KEPITING SEAWEED DLL MESKIPUN PAKE WADAH TAPI TETAP TERSUSUN DI WADAH SAYA KEK GITU  TAPI KALO PEMBELI UDH MASUKIN KETAS ATAU TROLI MAKA GAUSAH DITUMPUK KEK GITU MILIK PEMBELINYA DAN PASTIKAN GERAKAN LARI YG BERMAIN TU GA CEPET BGT TAPI RAPI SANTAI  DAN GAUSAH ADA PEMBATAS GAMBAR 2, PASTIKAN benerin angle sepatu roda agar nempel di telapak kaki dan sesuai angle telapak kaki,BENERIN CARA KUCING BERSELANCAR BIAR NAPAK DI PAPAN SELANCAR DAN KUCINGNYA BISA LELUASA MAIN SELANCAR DAN ADA OMBAK NYA DAN BENERIN ANIMASI KUCING YG BIKIN ISTANA PASIR , ISTANA PASIRNYA BESARIN 2X DAN TOLONG BENERIN YG MAIN LAYANGAN BIAR SAMBIL LARI LARIAN DAN ADA BANYAK KUCING DAN ANAK KUCING DI ZONA BERMAIN  DAN BENERIN ARAH LARI ANAK KUCING BIAR GA JALAN MUNDUR SAMBIL SALAH ARAH POKOKNYA BENER IN"
+
+Rincian Tugas & Implementasi:
+1. Tumpukan Barang Karakter (Gaya Monkey Mart):
+   - Barang yang dibawa pemain (ikan, mangga/buah, kepiting, rumput laut/seaweed, sushi, dll.) ditumpuk tinggi ke atas bertingkat rapi di wadah/tangan.
+   - Efek goyangan halus (sway) saat berjalan dan indikator "MAX" saat penuh persis seperti gambar referensi.
+   - Pembeli yang memakai tas belanja atau troli tetap normal (tidak ditumpuk tinggi).
+2. Kecepatan Lari Pemain:
+   - Kecepatan lari disesuaikan agar tidak terlalu ngebut/terlalu cepat, tapi rapi, mulus, dan santai.
+3. Hapus Pembatas/Pagar Kayu (Gambar 2):
+   - Pagar/pembatas kayu panjang di area pantai dihilangkan agar kucing bebas bergerak leluasa tanpa terhalang.
+4. Perbaikan Sepatu Roda:
+   - Sudut dan posisi sepatu roda disesuaikan persis menempel pada telapak kaki kucing mengikuti rotasi dan ayunan kaki.
+5. Berselancar & Papan Selancar:
+   - Kucing napak kokoh di atas papan selancar.
+   - Papan selancar bisa digunakan berselancar leluasa di area air laut dengan animasi ombak bergelombang dan buih air.
+6. Kucing Pembuat Istana Pasir:
+   - Ukuran istana pasir diperbesar 2x lipat lebih megah dengan menara dan bendera.
+   - Animasi kucing menepuk pasir dan membuat istana lebih hidup.
+7. Kucing & Anak Kucing di Zona Bermain:
+   - Kucing penerbang layangan kini berlari-larian riang mengitari pantai dengan layangan yang meliuk.
+   - Menambahkan banyak kucing dan anak kucing yang bermain riang di zona pantai.
+   - Memperbaiki arah hadap anak kucing agar selalu menghadap ke arah lari (tidak berjalan mundur atau salah arah).

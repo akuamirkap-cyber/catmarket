@@ -1,0 +1,6 @@
+{
+  "name": "Cat Fish Market",
+  "description": "Cat Fish Market Beach Resort - Permainan simulasi pasar ikan kucing dengan mekanisme pasar yang seru.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
