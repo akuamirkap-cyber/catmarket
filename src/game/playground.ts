@@ -257,113 +257,318 @@ export function drawSandPlayCat(ctx: CanvasRenderingContext2D, x: number, y: num
 }
 
 // ---------------------------------------------------------------
-//  2. BERSELANCAR: DYNAMIC SURFING CATS (Carving Ocean Waves + Feet Firmly Planted)
+//  2. BERSELANCAR: kucing carving di laut lepas (bukan lagi di pinggir pantai)
+//     · jalur S lebar jauh dari garis pantai
+//     · ombak bergulung (swell) yang menaik-turunkan papan
+//     · papan & kucing miring mengikuti carve
+//     · wake busa melengkung di belakang papan + cipratan dari rail
 // ---------------------------------------------------------------
+const SURF_CATS: Cat[] = [];
+
 export function drawSurfingCat(ctx: CanvasRenderingContext2D, baseX: number, baseY: number, t: number, pal: Pal, id: number, res = 0, ttl = 2) {
-  if (res > 0) {
-    cachedScene(ctx, `surf:${baseX}:${baseY}:${id}`, baseX - 225, baseY - 165, 450, 250, res, ttl, (c) => drawSurfingCat(c, baseX, baseY, t, pal, id, 0));
-    return;
-  }
-  // Leluasa berselancar: Carves across the ocean with wide sweep!
-  const sweep = Math.sin(t * 0.95 + id * 2.1) * 85;
-  const curX = baseX + sweep;
-  const curDir = Math.cos(t * 0.95 + id * 2.1) >= 0 ? 1 : -1;
-
-  // Ocean swell bob and pitch
-  const waveH = Math.sin(t * 3.4 + curX * 0.02) * 11;
-  const curY = baseY + waveH;
-  const carveTilt = (curDir * 0.24) + Math.sin(t * 3.4 + curX * 0.02) * 0.15;
+  const sweep = 124; // lebar carving kiri-kanan
+  const path = (tt: number) => {
+    const a = tt * 0.58 + id * 2.4;
+    return {
+      x: baseX + Math.sin(a) * sweep,
+      y: baseY + Math.cos(a) * 22 + Math.sin(tt * 1.5 + id * 1.3) * 5,
+      a,
+    };
+  };
+  const p = path(t);
+  const carve = Math.cos(p.a);          // -1..1 : kekuatan carve ke samping
+  const dir = carve >= 0 ? 1 : -1;
+  const speed = Math.abs(carve);        // 0 saat balik arah, 1 saat carve penuh
+  const roll = dir * (0.07 + 0.14 * speed) + Math.sin(t * 1.9 + id) * 0.035;
+  const bob = Math.sin(t * 2.4 + id * 1.7) * 2.2;
 
   ctx.save();
-  ctx.translate(curX, curY);
-
-  // 1. DYNAMIC ROLLING OCEAN SURF WAVE (Ombak besar bergulung & berbusa putih!)
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(-75 * curDir, 32);
-  ctx.quadraticCurveTo(0, -10, 70 * curDir, 18);
-  ctx.quadraticCurveTo(50 * curDir, 32, -75 * curDir, 32);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(68,212,242,.52)'; ctx.fill();
-
-  // White cresting foam curl
+  ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(255,255,255,.95)';
-  ctx.lineWidth = 5.5;
-  ctx.beginPath();
-  ctx.moveTo(-65 * curDir, 20);
-  ctx.quadraticCurveTo(-12 * curDir, -4, 58 * curDir, 16);
-  ctx.stroke();
 
-  // Water spray plumes shooting off the carving board edge
-  for (let k = 0; k < 5; k++) {
-    const spX = -55 * curDir - curDir * k * 14 + Math.sin(t * 16 + k) * 5;
-    const spY = 14 + Math.sin(t * 14 + k) * 6;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(spX, spY, 2.8 + (k % 2), 0, PI2); ctx.fill();
+  // ---------- 1. JEJAK DI AIR: pita busa melengkung + rail V di belakang papan
+  ctx.globalAlpha = 0.05;
+  ctx.fillStyle = '#ffffff';
+  for (let k = 5; k >= 1; k--) {
+    const q = path(t - k * 0.16);
+    const f = 1 - k / 6;
+    ctx.beginPath();
+    ctx.ellipse(q.x, q.y + 15, 22 * f + 5, 7 * f + 2, 0, 0, PI2);
+    ctx.fill();
   }
-  ctx.restore();
-
-  // 2. SURFBOARD with feet FIRMLY PLANTED ON DECK (Napak di papan!)
-  ctx.save();
-  ctx.rotate(carveTilt);
-  ctx.scale(curDir, 1);
-
-  // Shadow in ocean water
-  ctx.globalAlpha = 0.26; ctx.fillStyle = '#0a406a';
-  ctx.beginPath(); ctx.ellipse(0, 18, 58, 10, 0, 0, PI2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.85)';
+  ctx.lineWidth = 2.6;
+  for (const side of [-1, 1]) {
+    ctx.globalAlpha = 0.52;
+    ctx.beginPath();
+    for (let k = 0; k <= 10; k++) {
+      const q = path(t - k * 0.09);
+      const f = k / 10;
+      const x = q.x + side * (8 + 17 * f * f) - dir * f * 5;
+      const y = q.y + 15 + f * 2;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
   ctx.globalAlpha = 1;
 
-  // Sleek Aerodynamic Tropical Surfboard
-  const board = () => {
+  // ---------- 2. OMBAK: pita air + garis ombak pecah yang ditunggangi papan
+  ctx.save();
+  ctx.translate(p.x, p.y + 5 + bob * 0.3);
+
+  // bayangan air dalam
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = '#064a70';
+  ctx.beginPath(); ctx.ellipse(2, 20, 122, 18, 0, 0, PI2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // ombak kecil di belakang papan: punggung air yang naik lalu pecah jadi busa
+  const back = () => {
     ctx.beginPath();
-    ctx.moveTo(-56, 7);
-    ctx.quadraticCurveTo(0, 16, 56, 6);
-    ctx.quadraticCurveTo(70, 4, 74, 1);
-    ctx.quadraticCurveTo(68, -4, 54, -5);
-    ctx.quadraticCurveTo(0, -12, -56, -6);
-    ctx.quadraticCurveTo(-66, 1, -56, 7);
+    ctx.moveTo(-134, 14);
+    ctx.bezierCurveTo(-118, -14, -72, -30, -8, -32);
+    ctx.bezierCurveTo(54, -34, 96, -18, 118, 6);
+    ctx.lineTo(118, 16);
+    ctx.bezierCurveTo(60, 10, -60, 10, -134, 18);
     ctx.closePath();
   };
+  const wg = ctx.createLinearGradient(0, -34, 0, 16);
+  wg.addColorStop(0, 'rgba(170,246,255,.92)');
+  wg.addColorStop(0.4, 'rgba(104,230,250,.92)');
+  wg.addColorStop(0.78, 'rgba(40,170,224,.92)');
+  wg.addColorStop(1, 'rgba(22,128,190,.86)');
+  back();
+  ctx.fillStyle = wg;
+  ctx.fill();
 
-  board();
-  const bg = ctx.createLinearGradient(-56, 0, 74, 0);
-  bg.addColorStop(0, '#ffd23f');
-  bg.addColorStop(0.4, '#ff6b84');
-  bg.addColorStop(1, '#4ea8e8');
-  ctx.fillStyle = bg; ctx.fill();
-  ctx.lineWidth = 3.4; ctx.strokeStyle = OUT; ctx.stroke();
-
-  // Center racing stripe stringer
-  ctx.save();
-  board(); ctx.clip();
+  // busa di puncak punggung ombak (gumpalan, bukan garis kaku)
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(-65, -2.5, 145, 5.0);
+  for (let k = 0; k <= 6; k++) {
+    const u = (k + 0.4) / 7;
+    const x = -126 + u * 240;
+    const y = -26 + Math.sin(u * PI) * -6 + Math.pow(u, 2) * 20 + Math.sin(t * 2.4 + u * 8 + id) * 1.8;
+    const r = 7.4 + Math.sin(k * 2.7 + id) * 2.2;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * 1.25, r * 0.62, -0.12, 0, PI2);
+    ctx.fill();
+  }
+
+  // garis-garis arus di muka ombak
+  ctx.strokeStyle = 'rgba(255,255,255,.34)';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 2; k++) {
+    const yy = -6 + k * 9;
+    ctx.beginPath();
+    ctx.moveTo(-124 - k * 6, yy + 4);
+    ctx.quadraticCurveTo(-4, yy - 10, 116 + k * 6, yy - 2);
+    ctx.stroke();
+  }
+
+  // pita busa ombak pecah (gaya sama dengan busa pantai): pita putih utuh, tepi bergerigi
+  const crestX = (u: number) => -126 + u * 252;
+  const crestY = (u: number) => 11 + Math.sin(u * 7 + t * 2.2 + id) * 3 - Math.pow(u, 2) * 9;
+  ctx.beginPath();
+  for (let k = 0; k <= 18; k++) {
+    const u = k / 18;
+    const x = crestX(u), y = crestY(u);
+    if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  for (let k = 18; k >= 0; k--) {
+    const u = k / 18;
+    ctx.lineTo(crestX(u), crestY(u) + 9 + Math.abs(Math.sin(u * 26 + t * 3)) * 4.5);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,.95)';
+  ctx.fill();
+
+  // gumpalan busa di atas pita (tidak seragam, ada gumpalan besar)
+  ctx.fillStyle = '#ffffff';
+  for (let k = 0; k <= 8; k++) {
+    const u = k / 8;
+    const x = crestX(u);
+    const y = crestY(u) - 1;
+    const big = (k === 2 || k === 6) ? 2.6 : 0;
+    const r = 7 + Math.sin(k * 2.3 + id) * 1.6 + big;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * 1.2, r * 0.72, -0.1, 0, PI2);
+    ctx.fill();
+  }
+
+  // percikan kecil beterbangan di atas busa
+  for (let k = 0; k < 3; k++) {
+    const life = (t * 1.4 + k * 0.33 + id * 0.3) % 1;
+    ctx.globalAlpha = (1 - life) * 0.7;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-96 + k * 44 + Math.sin(t * 2 + k) * 5, crestY(0.5) - 8 - Math.sin(life * PI) * 16, 2.6 * (1 - life * 0.4), 0, PI2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // splash di ekor papan (cipratan saat carve)
+  ctx.fillStyle = 'rgba(255,255,255,.95)';
+  ctx.beginPath();
+  ctx.ellipse(-64, 16, 20, 7, -0.2, 0, PI2);
+  ctx.fill();
+  for (let k = 0; k < 4; k++) {
+    const life = (t * 1.8 + k * 0.25 + id * 0.4) % 1;
+    const bx = -58 - life * 26;
+    const by = 12 - Math.sin(life * PI) * (20 + 20 * speed) + life * 4;
+    ctx.globalAlpha = (1 - life) * 0.95;
+    ctx.beginPath();
+    ctx.arc(bx, by, 4 - life * 1.6, 0, PI2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // cipratan kecil dari ujung papan
+  for (let k = 0; k < 2; k++) {
+    const life = (t * 2.6 + k * 0.5 + id * 0.5) % 1;
+    ctx.globalAlpha = (1 - life) * 0.8;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(76 + life * 22, 8 - Math.sin(life * PI) * 12, 2.6 * (1 - life * 0.4), 0, PI2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // garis ombak kedua di belakang (kesan laut bergelombang)
+  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let k = 0; k <= 14; k++) {
+    const u = k / 14;
+    const x = -188 + u * 336;
+    const y = -26 + Math.sin(u * 6.5 + t * 1.8 + id * 1.4) * 4 + Math.pow(u, 2) * 12;
+    if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // riak di kaki ombak
+  ctx.strokeStyle = 'rgba(255,255,255,.42)';
+  ctx.lineWidth = 2.2;
+  for (let k = 0; k < 2; k++) {
+    const off = Math.sin(t * 2.2 + k * 2.4 + id) * 3;
+    ctx.beginPath();
+    ctx.ellipse(-4 + off, 28 + k * 7, 98 + k * 26, 7 + k * 3, 0, 0.12, PI - 0.12);
+    ctx.stroke();
+  }
   ctx.restore();
 
-  // Under-water skeg fin
-  ctx.beginPath();
-  ctx.moveTo(-44, 9); ctx.lineTo(-52, 23); ctx.lineTo(-34, 9); ctx.closePath();
-  ctx.fillStyle = '#1f6596'; ctx.fill();
-  ctx.lineWidth = 2.0; ctx.strokeStyle = OUT; ctx.stroke();
+  // ---------- 3. PAPAN + KUCING
+  ctx.save();
+  ctx.translate(p.x, p.y - 8 + bob);
+  ctx.rotate(roll);
 
-  // 3. CAT FIRMLY STANDING ON DECK (Kaki napak kokoh di atas papan selancar)
-  const cat = makeCat(0, 0, pal);
+  // bayangan papan di air
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#063c5c';
+  ctx.beginPath(); ctx.ellipse(6, 20, 66, 10, 0, 0, PI2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  const board = () => {
+    ctx.beginPath();
+    ctx.moveTo(-68, 0);
+    ctx.quadraticCurveTo(-66, -10, -50, -12);
+    ctx.quadraticCurveTo(16, -16, 70, -9);
+    ctx.quadraticCurveTo(86, -5, 87, 0);
+    ctx.quadraticCurveTo(80, 8, 58, 11);
+    ctx.quadraticCurveTo(0, 15, -48, 9);
+    ctx.quadraticCurveTo(-69, 5, -68, 0);
+    ctx.closePath();
+  };
+  board();
+  const bg = ctx.createLinearGradient(0, -15, 0, 15);
+  bg.addColorStop(0, '#fff0c4');
+  bg.addColorStop(0.5, '#ffd08a');
+  bg.addColorStop(1, '#f2a55f');
+  ctx.fillStyle = bg;
+  ctx.fill();
+
+  // hidung papan coral + ekor aqua (tanpa clip: bentuknya sudah di dalam dek)
+  ctx.fillStyle = '#ff8a70';
+  ctx.beginPath(); ctx.ellipse(74, 0, 14, 9.5, 0, 0, PI2); ctx.fill();
+  ctx.fillStyle = '#6fd3ef';
+  ctx.beginPath(); ctx.ellipse(-60, 0, 12, 8.5, 0, 0, PI2); ctx.fill();
+  // garis tengah krem
+  ctx.fillStyle = '#fffaf0';
+  ctx.beginPath(); ctx.roundRect(-58, -2.6, 122, 5.2, 2.6); ctx.fill();
+  // grip pad di dek belakang
+  ctx.fillStyle = 'rgba(64,42,78,.4)';
+  ctx.beginPath(); ctx.roundRect(-50, -8, 24, 5, 2.4); ctx.fill();
+
+  // garis luar + kilau atas
+  board();
+  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = OUT;
+  ctx.stroke();
+  // fin di bawah ekor
+  ctx.beginPath();
+  ctx.moveTo(-50, 10); ctx.lineTo(-60, 27); ctx.lineTo(-38, 10);
+  ctx.closePath();
+  ctx.fillStyle = '#2c85b4';
+  ctx.fill();
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = OUT;
+  ctx.stroke();
+
+  // cipratan air dari rail belakang
+  for (let k = 0; k < 5; k++) {
+    const life = (t * 1.9 + k * 0.2 + id * 0.2) % 1;
+    const sx = -52 - life * 54;
+    const sy = 10 - Math.sin(life * PI) * (12 + 14 * speed) + life * 5;
+    ctx.globalAlpha = (1 - life) * 0.95;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3.2 * (1 - life * 0.55), 0, PI2);
+    ctx.fill();
+  }
+  // cipratan kecil di ujung depan papan
+  for (let k = 0; k < 3; k++) {
+    const life = (t * 2.6 + k * 0.33 + id * 0.5) % 1;
+    ctx.globalAlpha = (1 - life) * 0.75;
+    ctx.beginPath();
+    ctx.arc(66 + life * 20, 5 - Math.sin(life * PI) * 14, 2.4 * (1 - life * 0.4), 0, PI2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // kucing: berdiri kokoh di dek, condong mengikuti carve
+  // (satu objek Cat per surfer supaya cache sprite di drawCatCached tetap hit —
+  //  membuat Cat baru tiap frame akan membuang + mengalokasikan kanvas terus)
+  let cat = SURF_CATS[id];
+  if (!cat || cat.pal !== pal) cat = SURF_CATS[id] = makeCat(0, 0, pal);
   cat.t = t;
   cat.happy = 0;
   cat.exc = 0.9;
-  cat.eyesOpen = true;  // Wide sparkly eyes enjoying surfing!
+  cat.eyesOpen = true;
   cat.fx = 1;
   cat.side = 1;
-  cat.board = true;     // Surfer stance with knees bent and arms out for balance!
+  cat.board = true;
+  cat.mv = 1;
+  cat.speed = 60 + 90 * speed;
+  cat.r = 0.25 + 0.35 * speed;
+  cat.phase = t * (5 + 3 * speed);
+  cat.tilt = roll * 0.3;
 
   ctx.save();
-  // Aligned precisely so paws stand firmly on the deck top surface (napak di papan selancar)!
-  ctx.translate(0, -8);
-  drawCat(ctx, cat, 0.78);
+  ctx.translate(0, -10);
+  ctx.rotate(roll * 0.3);
+  drawCatCached(ctx, cat, 0.8, res, Math.max(4, ttl));
   ctx.restore();
-  ctx.restore(); // board frame
-  ctx.restore(); // world frame
+
+  // busa di sekitar ekor papan (di atas air, ikut miring)
+  ctx.globalAlpha = 0.55 + 0.2 * speed;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.ellipse(-30, 16, 27 + Math.sin(t * 5 + id) * 3, 6.5, 0, 0, PI2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  ctx.restore(); // papan
+
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------

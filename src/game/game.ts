@@ -3059,8 +3059,11 @@ export class Game {
     items.push({ y: 745, draw: () => { drawRock(ctx, 1700, 745, 1.3); drawCoral(ctx, 1668, 750, 0.9, '#ff7aa8'); } });
 
     // Zone 3 Beach Playground: Surfing, Sand play, Kite flying
-    if (inV(160, ZY + 360, 180)) items.push({ y: ZY + 370, draw: () => drawSurfingCat(ctx, 160, ZY + 360, this.time, CUSTOMER_PALS[2], 0, s, this.npcTtl) });
-    if (inV(240, ZY + 680, 180)) items.push({ y: ZY + 690, draw: () => drawSurfingCat(ctx, 240, ZY + 680, this.time, CUSTOMER_PALS[4], 1, s, this.npcTtl) });
+    // Surfers ride the OPEN WATER well away from the shoreline (shore is at x ~= 360):
+    // three of them carve different lanes so the sea always looks alive.
+    if (inV(110, ZY + 300, 300)) items.push({ y: ZY + 310, draw: () => drawSurfingCat(ctx, 110, ZY + 300, this.time, CUSTOMER_PALS[2], 0, s, this.npcTtl) });
+    if (inV(-60, ZY + 650, 300)) items.push({ y: ZY + 660, draw: () => drawSurfingCat(ctx, -60, ZY + 650, this.time, CUSTOMER_PALS[4], 1, s, this.npcTtl) });
+    if (inV(-250, ZY + 470, 300)) items.push({ y: ZY + 480, draw: () => drawSurfingCat(ctx, -250, ZY + 470, this.time, CUSTOMER_PALS[0], 2, s, this.npcTtl) });
     if (inV(620, ZY + 480, 140)) items.push({ y: ZY + 490, draw: () => drawSandPlayCat(ctx, 620, ZY + 480, this.time, CUSTOMER_PALS[0], s, this.npcTtl) });
     if (inV(1140, ZY + 620, 140)) items.push({ y: ZY + 630, draw: () => drawSandPlayCat(ctx, 1140, ZY + 620, this.time, CUSTOMER_PALS[1], s, this.npcTtl) });
     if (inV(840, ZY + 340, 180)) items.push({ y: ZY + 350, draw: () => drawKiteFlyingCat(ctx, 840, ZY + 340, this.time, CUSTOMER_PALS[3], 'fish', 0, s, this.npcTtl) });
