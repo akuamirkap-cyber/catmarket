@@ -626,7 +626,8 @@ function drawCarry(ctx: CanvasRenderingContext2D, m: Cat, p: Pal, mode: 'full' |
   // That is why a fish / fruit no longer "shrinks" when it is picked up into the basket.
   const itemStep = 19;
   const itemS = 1.06;
-  // The pile is carried at the cat's side (like a real shopping bag) so it never covers the face
+  // The pile leans slightly away from the face as it grows (Monkey-Mart style) so the cat
+  // still reads as a cat while carrying a full load.
   const pileX = cx;
   for (let i = 0; i < n; i++) {
     // Dynamic sway for the tall stack as the cat runs; a tiny alternating offset makes the
@@ -1958,6 +1959,7 @@ function drawCatInner(ctx: CanvasRenderingContext2D, m: Cat, scale = 1) {
 
   // The carried pile is drawn over the body but under nothing: the cat holds its wadah in
   // front of the chest exactly like Monkey Mart (face normally peeks above a short stack).
+  // the pile is held in front of the cat, nudged to the side so the face stays visible
   if (carryFront) drawCarry(ctx, m, p, rod.on ? 'basket' : 'full');
 
   if (m.exc > 0.5) {
