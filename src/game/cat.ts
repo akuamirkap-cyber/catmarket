@@ -624,7 +624,7 @@ function drawCarry(ctx: CanvasRenderingContext2D, m: Cat, p: Pal, mode: 'full' |
   // The cat is drawn at 0.8x in the world, so an item drawn here at 1.06 is drawn at
   // 1.06 * 0.8 = 0.85 world scale — exactly the size it has lying on the ground (FISH_S 0.8).
   // That is why a fish / fruit no longer "shrinks" when it is picked up into the basket.
-  const itemStep = 16;
+  const itemStep = 19;
   const itemS = 1.06;
   // The pile is carried at the cat's side (like a real shopping bag) so it never covers the face
   const pileX = cx;
