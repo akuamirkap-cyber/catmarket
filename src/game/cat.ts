@@ -1627,10 +1627,14 @@ function drawCatInner(ctx: CanvasRenderingContext2D, m: Cat, scale = 1) {
   };
   const withEar = (s: number, fn: () => void) => {
     const tw = s < 0 ? m.twL : m.twR;
-    const flop = Math.sin(m.phase * 2 - 1.1) * (0.04 + 0.14 * r) * mv;
-    const idleW = Math.sin(m.t * 2.1 + s * 1.3) * 0.03 * (1 - mv);
-    const a = s * (CAT_CFG.earAngle * PI / 180 - 0.03 + (0.06 + 0.34 * r) * mv + flop) + idleW + Math.sin(m.t * 45) * 0.3 * tw + Math.sin(m.t * 32) * 0.07 * m.alert
-      + Math.sin(m.t * 14 + s) * 0.05 * m.exc;
+    // Sudut kuping TETAP saat jalan / lari: tidak ada lagi flop yang ikut langkah,
+    // jadi telinga tidak terlihat naik-turun. Goyangan halus hanya saat diam.
+    const still = 1 - mv;
+    const idleW = Math.sin(m.t * 2.1 + s * 1.3) * 0.03 * still;
+    const a = s * (CAT_CFG.earAngle * PI / 180 - 0.03) + idleW
+      + Math.sin(m.t * 45) * 0.3 * tw * (1 - 0.85 * mv)
+      + Math.sin(m.t * 32) * 0.07 * m.alert * still
+      + Math.sin(m.t * 14 + s) * 0.05 * m.exc * still;
     ctx.save();
     ctx.translate(0, -CAT_CFG.earLift); // + = ear sits higher on the head
     ctx.translate(s * 19, -10);

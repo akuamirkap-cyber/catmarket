@@ -3285,12 +3285,32 @@ export class Game {
       m.globalCompositeOperation = 'destination-in';
       const px = this.scale * this.dprMax * this.rs * (bw / cw); // world unit -> mask pixel
       const toX = (wx: number) => (wx - this.V.x0) * px;
-      const g = m.createLinearGradient(toX(400), 0, toX(760), 0);
+      // Glow belongs to the WATER ONLY. It used to stay at full strength right up to the
+      // shoreline, which washed out the sand and made the cat look pale/washed-out
+      // whenever it walked along the beach. Now it fades out before the sand starts
+      // (shore is at x ~= 360), so nothing on land ever gets the white haze.
+      const g = m.createLinearGradient(toX(-100), 0, toX(352), 0);
       g.addColorStop(0, 'rgba(0,0,0,1)');
-      g.addColorStop(0.5, 'rgba(0,0,0,0.22)');
-      g.addColorStop(1, 'rgba(0,0,0,0.06)');
+      g.addColorStop(0.72, 'rgba(0,0,0,0.85)');
+      g.addColorStop(0.92, 'rgba(0,0,0,0.25)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
       m.fillStyle = g;
       m.fillRect(0, 0, bw, bh);
+      // ...and never lay glow on top of the player: a soft hole keeps the cat's own
+      // colours (fur, hat, fish) fully saturated next to bright water.
+      const pm = this.player;
+      const cx = (pm.x - this.V.x0) * px;
+      const cy = (pm.y - catLayout().height * MS * 0.5 - this.V.y0) * px;
+      const rad = 46 * px + 3;
+      const hole = m.createRadialGradient(cx, cy, rad * 0.42, cx, cy, rad);
+      hole.addColorStop(0, 'rgba(0,0,0,1)');
+      hole.addColorStop(0.7, 'rgba(0,0,0,0.85)');
+      hole.addColorStop(1, 'rgba(0,0,0,0)');
+      m.globalCompositeOperation = 'destination-out';
+      m.fillStyle = hole;
+      m.beginPath();
+      m.arc(cx, cy, rad, 0, PI2);
+      m.fill();
       m.globalCompositeOperation = 'source-over';
     }
     ctx.save();
