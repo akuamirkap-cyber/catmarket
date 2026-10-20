@@ -44,7 +44,8 @@ const ASSIST_COST = [140, 260, 420];
 const HELPER_SPEED = 135;
 const zc = (r: Rect): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 const WALK = 112;
-const RUN = 168;
+const RUN = 205;        // Shift / joystick penuh: lari kencang yang terasa (≈1.8x jalan)
+const SPD_CAP = 265;    // batas atas setelah upgrade + skateboard / sepatu roda
 const MS = 0.8; // cat draw scale
 const ZOOM = 0.7; // camera zoomed out by 30%
 
@@ -196,6 +197,8 @@ export class Game {
   private keys = new Set<string>();
   private joy = { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 };
   runLatch = false;
+  private shiftDown = false;
+  private runInput = false; // true saat frame ini benar-benar berlari (untuk HUD)
 
   private player: Cat;
   private chefCat: Cat;
@@ -594,14 +597,21 @@ export class Game {
   private onKeyDown = (e: KeyboardEvent) => {
     sfx.unlock(); sfx.startAmbience();
     const k = e.key.toLowerCase();
+    if (e.shiftKey || k === 'shift') this.shiftDown = true;
     if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
     if (k === 'r' && !e.repeat) this.runLatch = !this.runLatch;
     if (k === ' ' && !e.repeat && !this.paused) this.unlockAll();
     if (k === 't' && !e.repeat && !this.paused && !this.treasure) this.spawnTreasure();
     this.keys.add(k);
   };
-  private onKeyUp = (e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()); };
-  private onBlur = () => { this.keys.clear(); this.joy.active = false; };
+  private onKeyUp = (e: KeyboardEvent) => {
+    this.keys.delete(e.key.toLowerCase());
+    if (!e.shiftKey) this.shiftDown = false;
+  };
+  private onBlur = () => { this.keys.clear(); this.shiftDown = false; this.joy.active = false; };
+
+  /** Lari: tombol Shift fisik, tombol R (latch), atau dorong joystick penuh di HP. */
+  private sprinting() { return this.shiftDown || this.runLatch || this.keys.has('shift'); }
   private resizeTimer = 0;
   private onResize = () => {
     // Mobile browsers fire a burst of resize events while the address bar slides away;
@@ -676,6 +686,7 @@ export class Game {
 
   private readInput() {
     let dx = 0, dy = 0, spd = WALK;
+    this.runInput = false;
     const k = this.keys;
     if (k.has('a') || k.has('arrowleft')) dx -= 1;
     if (k.has('d') || k.has('arrowright')) dx += 1;
@@ -684,7 +695,8 @@ export class Game {
     if (dx || dy) {
       const l = Math.hypot(dx, dy);
       dx /= l; dy /= l;
-      spd = k.has('shift') || this.runLatch ? RUN : WALK;
+      this.runInput = this.sprinting();
+      spd = this.runInput ? RUN : WALK;
     }
     if (this.joy.active) {
       const jx = this.joy.x - this.joy.ox, jy = this.joy.y - this.joy.oy;
@@ -692,11 +704,13 @@ export class Game {
       const mag = clamp(l / 60, 0, 1);
       if (l > 8) {
         dx = jx / l; dy = jy / l;
-        spd = this.runLatch ? RUN * Math.min(1, mag * 1.4) : mag < 0.6 ? WALK * (mag / 0.6) : WALK + (RUN - WALK) * ((mag - 0.6) / 0.4);
+        const sprint = this.sprinting() || mag > 0.92;
+        this.runInput = this.runInput || sprint;
+        spd = sprint ? RUN * Math.min(1, mag * 1.15) : mag < 0.6 ? WALK * (mag / 0.6) : WALK + (RUN - WALK) * ((mag - 0.6) / 0.4);
         spd = Math.max(spd, 40);
       }
     }
-    return { dx, dy, spd: Math.min(185, spd * this.speedMul * this.rideMul()) };
+    return { dx, dy, spd: Math.min(SPD_CAP, spd * this.speedMul * this.rideMul()) };
   }
 
   // ------------------------------------------------ coconuts
@@ -1796,7 +1810,8 @@ export class Game {
 
     if (p.stepSide >= 0 && p.speed > 40 && !p.skates && !p.board) {
       this.addPrint(p, 0.42);
-      this.stepDust(p, p.r > 0.5);
+      // saat lari, debu kaki lebih tebal supaya kecepatannya terasa
+      this.stepDust(p, p.r > 0.5 || (this.sprinting() && p.speed > 170));
     }
     if ((p.skates || p.board) && p.speed > 110 && this.hq) {
       this.skateT -= dt;
@@ -2097,7 +2112,7 @@ export class Game {
     const p = this.player;
     const m = MISSIONS[this.mIdx];
     return {
-      mode: p.speed < 20 ? 'IDLE' : p.speed > 200 ? 'RUN' : 'WALK',
+      mode: p.speed < 20 ? 'IDLE' : this.runInput ? 'RUN' : 'WALK',
       speed: Math.round(p.speed / 5) * 5, carry: p.carry.length, max: p.maxCarry, skid: p.skidding, fishing: this.fPhase !== 'idle',
       pond: this.pond.length, pondCap: this.pondCap(), table: this.table.length, tableCap: TABLE.cap,
       tray: this.sushiIn.length, trayCap: TRAY.cap, sushi: this.sushiDisp.length, sushiCap: DISP.cap,
