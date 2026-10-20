@@ -43,9 +43,9 @@ const KEY = 'cat-fish-market-v2';
 const ASSIST_COST = [140, 260, 420];
 const HELPER_SPEED = 135;
 const zc = (r: Rect): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
-const WALK = 112;
-const RUN = 205;        // Shift / joystick penuh: lari kencang yang terasa (≈1.8x jalan)
-const SPD_CAP = 265;    // batas atas setelah upgrade + skateboard / sepatu roda
+const WALK = 205;       // kecepatan normal (dulu ini kecepatan Shift)
+const RUN = WALK * 2;   // Shift / joystick penuh: 2x kecepatan normal
+const SPD_CAP = 700;    // pengaman atas saja: upgrade + skateboard + sprint tetap muat
 const MS = 0.8; // cat draw scale
 const ZOOM = 0.7; // camera zoomed out by 30%
 
@@ -704,9 +704,10 @@ export class Game {
       const mag = clamp(l / 60, 0, 1);
       if (l > 8) {
         dx = jx / l; dy = jy / l;
-        const sprint = this.sprinting() || mag > 0.92;
-        this.runInput = this.runInput || sprint;
-        spd = sprint ? RUN * Math.min(1, mag * 1.15) : mag < 0.6 ? WALK * (mag / 0.6) : WALK + (RUN - WALK) * ((mag - 0.6) / 0.4);
+        // dorong setengah = jalan normal, dorong penuh = RUN; tombol Lari menjaga RUN walau dorongan kecil
+        const base = mag < 0.6 ? WALK * (mag / 0.6) : WALK + (RUN - WALK) * ((mag - 0.6) / 0.4);
+        spd = this.sprinting() ? Math.max(base, RUN * Math.min(1, mag * 1.4)) : base;
+        if (spd > WALK * 1.02) this.runInput = true;
         spd = Math.max(spd, 40);
       }
     }
@@ -1811,7 +1812,7 @@ export class Game {
     if (p.stepSide >= 0 && p.speed > 40 && !p.skates && !p.board) {
       this.addPrint(p, 0.42);
       // saat lari, debu kaki lebih tebal supaya kecepatannya terasa
-      this.stepDust(p, p.r > 0.5 || (this.sprinting() && p.speed > 170));
+      this.stepDust(p, p.r > 0.5 || (this.runInput && p.speed > WALK * 1.2));
     }
     if ((p.skates || p.board) && p.speed > 110 && this.hq) {
       this.skateT -= dt;

@@ -357,7 +357,7 @@ export default function App() {
               <div className="mb-1 text-[11px] font-black uppercase tracking-wider text-[#a07a4a]">⌨️ Tombol Pintas Keyboard</div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-bold text-[#6a4421]">
                 <div><b>WASD / Panah</b> : Jalan</div>
-                <div><b>Shift / 🏃</b> : Lari Kencang (di HP: dorong joystick penuh)</div>
+                <div><b>Shift / 🏃</b> : Lari 2x lebih cepat (di HP: dorong joystick penuh)</div>
                 <div><b>B</b> : Buka Buku Stok</div>
                 <div><b>U</b> : Menu Upgrade</div>
                 <div><b>K</b> : Menu Kostum</div>

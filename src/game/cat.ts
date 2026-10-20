@@ -220,7 +220,7 @@ export function postUpdate(m: Cat, dt: number, pvx: number, pvy: number, tvx: nu
   m.fy += (tfy - m.fy) * k;
 
   m.mv += (clamp(m.speed / 70, 0, 1) - m.mv) * Math.min(1, dt * 14);
-  m.r += (clamp((m.speed - 175) / 80, 0, 1) - m.r) * Math.min(1, dt * 9);
+  m.r += (clamp((m.speed - 240) / 150, 0, 1) - m.r) * Math.min(1, dt * 9);
 
   m.phase += m.speed * dt * 0.058 * (m.skates ? 0.62 : m.board ? 0.9 : 1);
   m.tailPhase += dt * (2.0 + 8 * m.mv + 6 * m.r);
@@ -840,7 +840,8 @@ function headPath(ctx: CanvasRenderingContext2D) {
 function drawBoard(ctx: CanvasRenderingContext2D, m: Cat) {
   const S = 1.6;
   const tilt = -m.fx * 0.04 * m.mv + Math.sin(m.t * 18) * 0.015 * m.mv;
-  const isSurfing = m.x < 380 || m.speed > 160;
+  // ombak hanya di laut (x < garis pantai), bukan karena kecepatan: skateboard di darat tetap pakai roda
+  const isSurfing = m.x < 380;
 
   ctx.save();
   // Align deck top directly under the paws so the cat is firmly planted on deck (napak di papan selancar)!
@@ -1268,7 +1269,9 @@ function drawCatInner(ctx: CanvasRenderingContext2D, m: Cat, scale = 1) {
   // Smooth walk: feet swing on rounded arcs (lift is squared => no kinks), knees bend towards the facing direction,
   // and every foot points the way the cat is going.
   const kk = Math.max(lk, 0.92);
-  const stride = (9 + 5.6 * r) * (1 + 0.75 * sk) * kk;
+  // langkah ikut kecepatan: normal 205 -> 1.0, sprint 410 -> ~1.3 (tanpa membuat kaki melayang)
+  const pace = clamp(m.speed / 205, 0.75, 1.45);
+  const stride = (9 + 5.6 * r) * (1 + 0.75 * sk) * kk * (0.82 + 0.18 * pace);
   const hipX = Math.min(7 * CAT_CFG.legGap, HW * 0.8);
   const face = clamp(m.fx, -1, 1);
   const fa = Math.abs(face);
