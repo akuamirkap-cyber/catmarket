@@ -8,7 +8,7 @@
 //  6. Sunbathing cats truly LYING DOWN (rebahan/tiduran santai) on towels
 //  7. Sun from the LEFT: all shadows cast to the RIGHT, umbrellas angled to the left!
 // ---------------------------------------------------------------
-import { drawCat, drawCatCached, makeCat, CUSTOMER_PALS, type Cat, type Pal } from './cat';
+import { drawCat, drawCatCached, makeCat, catHandPos, CUSTOMER_PALS, type Cat, type Pal } from './cat';
 
 const PI = Math.PI;
 const PI2 = Math.PI * 2;
@@ -200,57 +200,133 @@ export function drawSandPlayCat(ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.fillStyle = '#ff5a7a'; ctx.fill();
   ctx.lineWidth = 2.6; ctx.strokeStyle = OUT; ctx.stroke();
 
-  // ---------------- ANIMATED CAT BUILDING & PATTING SAND ----------------
-  // 3-Phase Animation Cycle:
-  // Phase 1 (0.0 - 0.4): Scoop sand with spade
-  // Phase 2 (0.4 - 0.7): Lift & dump sand on tower
-  // Phase 3 (0.7 - 1.0): Rhythmic patting with both paws ("menepuk pasir")
-  const cycle = (t * 1.8) % 1;
-  const isPatting = cycle >= 0.65;
-  const patCycle = ((cycle - 0.65) / 0.35) * PI2 * 3;
-  const patY = isPatting ? Math.sin(patCycle) * 3 : 0;
-  const scoopY = !isPatting ? Math.sin((cycle / 0.65) * PI2) * 5 : 0;
+  // ---------------- CAT BUILDING THE CASTLE (slow, steady loop) ----------------
+  // The old version rebuilt the cat from scratch every frame (new random tail
+  // phase) and bounced the whole body 1.8x per second, which is exactly what
+  // looked like "geter". Now: one persistent cat per spot, planted on the sand,
+  // and a single 3.2 s loop  dig -> lift -> tip -> pat  driven by eased angles.
+  const CYCLE = 3.2;
+  const u = (t / CYCLE) % 1;
+  const ease = (v: number) => { const k = v < 0 ? 0 : v > 1 ? 1 : v; return k * k * (3 - 2 * k); };
+  const seg = (a: number, b: number) => ease((u - a) / (b - a));
 
-  const cat = makeCat(0, 0, pal);
-  cat.t = t;
-  cat.happy = 0;
-  cat.exc = 0.9;
-  cat.eyesOpen = true;  // Wide sparkly happy eyes!
-  cat.fx = 1;
-  cat.side = 1;
-
-  ctx.save();
-  ctx.translate(-26, 20 + (isPatting ? patY : scoopY * 0.4));
-  drawCat(ctx, cat, 0.84);
-
-  // Animated Hand holding Spade or Patting
-  ctx.save();
-  ctx.translate(16, -18);
-  if (!isPatting) {
-    // Scooping spade motion
-    ctx.rotate(0.25 + Math.sin(cycle * PI2) * 0.45);
-    ctx.fillStyle = '#ffd24a';
-    ctx.fillRect(-2, 0, 5, 20);
-    ctx.beginPath(); ctx.roundRect(-7, 18, 14, 14, 3); ctx.fillStyle = '#ff9f45'; ctx.fill();
-    ctx.lineWidth = 1.8; ctx.strokeStyle = OUT; ctx.stroke();
-    // Flying sand grains when lifting
-    if (cycle > 0.3 && cycle < 0.65) {
-      ctx.fillStyle = '#e8c27a';
-      ctx.beginPath(); ctx.arc(12, 12, 2.4, 0, PI2); ctx.fill();
-      ctx.beginPath(); ctx.arc(18, 7, 2.0, 0, PI2); ctx.fill();
-    }
-  } else {
-    // Patting paws on the sand tower! ("nepuk-nepuk pasir rapi")
-    ctx.rotate(0.8 + Math.sin(patCycle) * 0.3);
-    ctx.beginPath(); ctx.ellipse(6, 6, 7, 6, 0, 0, PI2);
-    ctx.fillStyle = pal.belly; ctx.fill();
-    ctx.lineWidth = 2.0; ctx.strokeStyle = OUT; ctx.stroke();
-    // Tiny sand dust puffs and sparkles on pat!
-    ctx.fillStyle = '#edd18e';
-    ctx.beginPath(); ctx.arc(14, 6 + patY, 2.2, 0, PI2); ctx.fill();
-    ctx.beginPath(); ctx.arc(19, 3 + patY, 1.8, 0, PI2); ctx.fill();
+  // one cycle, five readable beats: plant the spade -> lift a scoop -> tip it
+  // over the wall -> swing back -> two calm pats with the paw
+  let armAng: number;      // working arm: 0 = hanging down, PI/2 = pointing ahead
+  let spadeAng = -0.7;     // wrist angle of the spade
+  let spadeOn = true;
+  let load = 0;            // sand on the blade 0..1
+  let puff = 0;            // sand dust at the working point 0..1
+  if (u < 0.30) {                       // plant the blade in the sand
+    armAng = 1.02 + 0.42 * seg(0.05, 0.27);
+    spadeAng = -0.80 + 0.22 * seg(0.10, 0.28);
+    puff = seg(0.16, 0.30) * 0.65;
+  } else if (u < 0.52) {                // lift the loaded scoop (big readable arc)
+    armAng = 1.44 + 0.92 * seg(0.31, 0.51);
+    spadeAng = -0.58 - 0.20 * seg(0.32, 0.50);
+    load = seg(0.33, 0.48);
+  } else if (u < 0.64) {                // tip it over the castle wall
+    armAng = 2.36 + 0.14 * seg(0.54, 0.63);
+    spadeAng = -0.78 - 0.86 * seg(0.54, 0.64);
+    load = 1 - seg(0.55, 0.63);
+    puff = seg(0.56, 0.64);
+  } else if (u < 0.76) {                // bring the spade back down
+    armAng = 2.50 - 1.40 * seg(0.65, 0.75);
+    spadeAng = -1.64 + 0.72 * seg(0.65, 0.75);
+  } else {                              // pat the sand flat (two soft taps)
+    spadeOn = false;
+    const k = seg(0.77, 0.95);
+    const tap = Math.abs(Math.sin(k * PI * 2));
+    armAng = 1.05 - 0.42 * tap;
+    puff = tap * 0.85;
   }
+
+  // one persistent cat per sand pit: keeps the tail/blink state continuous
+  let cat = SAND_CATS.get(x * 1000 + y);
+  if (!cat || cat.pal !== pal) { cat = makeCat(0, 0, pal); SAND_CATS.set(x * 1000 + y, cat); }
+  cat.t = t;
+  cat.phase = 0;          // no walk cycle: the feet stay planted
+  cat.mv = 0; cat.r = 0; cat.speed = 0; cat.vx = 0; cat.vy = 0;
+  cat.fx = 1; cat.fy = 1; cat.side = 1;
+  cat.happy = 0; cat.exc = 0.22;
+  cat.eyesOpen = true;    // sparkly open eyes
+  cat.tailPhase = t * 2.1 + (x % 5);
+  const bl = (t % 4.3) / 4.3;
+  cat.blink = bl > 0.95 ? Math.sin(((bl - 0.95) / 0.05) * PI) : 0;
+  cat.hold = 1;           // the near paw is the working paw
+  cat.holdAng = armAng;
+
+  // the paw position is exactly where drawCat puts the held hand
+  const hand = catHandPos(cat.build, armAng);
+  const K = 0.84;
+  const hx = -26 + hand.x * K;
+  const hy = 20 + hand.y * K;
+  const tipX = hx - Math.sin(spadeAng) * 40;
+  const tipY = hy + Math.cos(spadeAng) * 40;
+
+  // spade drawn first so the paw wraps over the handle
+  if (spadeOn) {
+    const SHAFT = 26;          // handle length up to the blade
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(spadeAng);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    // wooden shaft (stops where the blade begins: no stick poking through the scoop)
+    ctx.beginPath(); ctx.roundRect(-2.2, -9, 4.4, SHAFT + 9, 2.2);
+    ctx.fillStyle = '#d9a866'; ctx.fill();
+    ctx.lineWidth = 2.0; ctx.strokeStyle = OUT; ctx.stroke();
+    // coral grip at the top
+    ctx.beginPath(); ctx.roundRect(-3.4, -11, 6.8, 7.5, 2.6);
+    ctx.fillStyle = '#ff6d8a'; ctx.fill();
+    ctx.lineWidth = 1.8; ctx.strokeStyle = OUT; ctx.stroke();
+
+    // scoop blade: flared trapezoid with a rounded bottom
+    ctx.beginPath();
+    ctx.moveTo(-6.4, SHAFT - 2);
+    ctx.lineTo(6.4, SHAFT - 2);
+    ctx.quadraticCurveTo(10, SHAFT + 7, 8.2, SHAFT + 15);
+    ctx.quadraticCurveTo(0, SHAFT + 21, -8.2, SHAFT + 15);
+    ctx.quadraticCurveTo(-10, SHAFT + 7, -6.4, SHAFT - 2);
+    ctx.closePath();
+    ctx.fillStyle = '#ffb055'; ctx.fill();
+    ctx.lineWidth = 2.4; ctx.strokeStyle = OUT; ctx.stroke();
+    // inner shadow so the scoop reads as hollow
+    ctx.beginPath();
+    ctx.ellipse(0, SHAFT + 3.6, 5.4, 2.1, 0, 0, PI2);
+    ctx.fillStyle = 'rgba(186,102,32,.35)'; ctx.fill();
+
+    // a heaped scoop of sand sitting in the blade
+    if (load > 0.02) {
+      ctx.beginPath();
+      ctx.ellipse(0, SHAFT + 0.5 - load * 2.2, 6.4 * load, 4.0 * load, 0, 0, PI2);
+      ctx.fillStyle = '#eac884'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = OUT; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(-26, 20);
+  drawCat(ctx, cat, K);
   ctx.restore();
+
+  // pile of sand the cat is building up, in front of the bucket
+  ell(ctx, -26 + 30, 22, 18, 6.2, '#e2c47e');
+  ell(ctx, -26 + 30, 20, 10.5, 3.6, '#efd79b');
+
+  // crisp little sand grains at the contact point (deterministic: no flicker)
+  if (puff > 0.06) {
+    ctx.globalAlpha = 0.9 * Math.min(1, puff * 1.4);
+    ctx.fillStyle = '#eecf8c';
+    for (const [dx, dy, r] of [[-7, -2, 2.3], [1, -7, 1.9], [8, -3, 1.6]] as const) {
+      ctx.beginPath();
+      ctx.arc(tipX + dx * puff, tipY + dy * puff, r, 0, PI2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 
   ctx.restore();
   ctx.restore();
@@ -264,6 +340,7 @@ export function drawSandPlayCat(ctx: CanvasRenderingContext2D, x: number, y: num
 //     · wake busa melengkung di belakang papan + cipratan dari rail
 // ---------------------------------------------------------------
 const SURF_CATS: Cat[] = [];
+const SAND_CATS = new Map<number, Cat>();
 
 export function drawSurfingCat(ctx: CanvasRenderingContext2D, baseX: number, baseY: number, t: number, pal: Pal, id: number, res = 0, ttl = 2) {
   const sweep = 124; // lebar carving kiri-kanan
